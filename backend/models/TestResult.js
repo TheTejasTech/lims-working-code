@@ -1,0 +1,60 @@
+const mongoose = require('mongoose');
+
+const resultDetailSchema = new mongoose.Schema({
+  testParameter: String,
+  result: String,
+  failFlag: { type: Boolean, default: false },
+  minimumReq: Number,
+  maximumReq: Number,
+  headingSpec2: String,
+  showOtherSpecReq: { type: Boolean, default: false },
+  showTestMethodReq: { type: Boolean, default: false },
+  showSysCode: { type: Boolean, default: false },
+});
+
+const testResultSchema = new mongoose.Schema(
+  {
+    labNo: { type: String, required: true, index: true },
+    sinId: { type: mongoose.Schema.Types.ObjectId, ref: 'SampleInward', required: true },
+    testPlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'TestPlan' },
+    testCode: String,
+    testName: { type: String, required: true },
+    testCaption: String,
+    dateOfCompletion: Date,
+    dateOfPerformance: Date,
+    specification: { type: mongoose.Schema.Types.ObjectId, ref: 'Specification' },
+    specification2: { type: mongoose.Schema.Types.ObjectId, ref: 'Specification' },
+    testMethod: String,
+    equipmentSerialNo: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipment' },
+    parameterGroup: String,
+    resultSetName: String,
+    deviation: String,
+    enclosure: String,
+    templateName: String,
+    unitConversion: String,
+    testPerformedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    humidity: String,
+    temperature: String,
+    resultDetails: [resultDetailSchema],
+    formulaResults: [{ paramName: String, calculatedValue: Number }],
+    overallPassFail: { type: String, enum: ['pass', 'fail', 'pending'], default: 'pending' },
+    autoRemarks: String,
+    observation: String,
+    officeInstructionForRecord: String,
+    witnessCaption: String,
+    witnessName: String,
+    witnessCompany: String,
+    witnessDate: Date,
+    accreditationScope: { type: Boolean, default: true },
+    holdFlag: { type: Boolean, default: false },
+    holdReason: String,
+    cancelFlag: { type: Boolean, default: false },
+    cancelReason: String,
+    status: { type: String, enum: ['pending', 'completed', 'approved', 'rejected'], default: 'pending' },
+    resultCalculationMode: { type: String, enum: ['auto', 'manual'], default: 'auto' },
+    isLocked: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('TestResult', testResultSchema);
