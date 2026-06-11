@@ -65,6 +65,7 @@ const sampleInwardSchema = new mongoose.Schema(
     poNumber: { type: String, trim: true },
     poNo: { type: String, trim: true },
     poDate: { type: Date },
+    whatsappNumber: { type: String, trim: true },
     allottedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     customerRemarks: { type: String, trim: true },
     sampleCollectedBy: { type: String, trim: true },
