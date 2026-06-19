@@ -18,8 +18,13 @@ import {
   Table,
   Checkbox,
   Tabs,
+  Upload,
 } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 import api from "../../utils/api";
 
@@ -36,6 +41,8 @@ const SampleFormPage = () => {
   ]);
   const [additionalDetails, setAdditionalDetails] = useState([]);
   const [deviationChecklist, setDeviationChecklist] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentFileList, setAttachmentFileList] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -68,6 +75,21 @@ const SampleFormPage = () => {
     setSamples(next);
   };
 
+  const handleAttachmentUploadChange = ({ fileList }) => {
+    const next = fileList.map((file) => {
+      const existing = attachments.find((a) => a.uid === file.uid);
+      return {
+        uid: file.uid,
+        name: file.name,
+        file: file.originFileObj || file,
+        description: existing?.description || "",
+        type: existing?.type || "electronic",
+      };
+    });
+    setAttachmentFileList(fileList);
+    setAttachments(next);
+  };
+
   const onFinish = async (values) => {
     if (!samples.length || !samples[0].sample) {
       return message.warning("Add at least one sample line");
@@ -85,9 +107,30 @@ const SampleFormPage = () => {
         samples: samples.filter((s) => s.sample),
         sampleAdditionalDetails: additionalDetails.filter((d) => d.description),
         deviationChecklist: deviationChecklist.filter((d) => d.description),
+        attachments: attachments
+          .filter((a) => !a.file)
+          .map((a) => ({
+            fileName: a.name,
+            description: a.description || "",
+            type: a.type || "electronic",
+          })),
         deviation: values.deviation || {},
       };
       const { data } = await api.post("/samples", payload);
+
+      const filesToUpload = attachments.filter((a) => a.file);
+      if (filesToUpload.length) {
+        const formData = new FormData();
+        filesToUpload.forEach((attachment) => {
+          formData.append("files", attachment.file);
+          formData.append("description", attachment.description || "");
+          formData.append("type", attachment.type || "electronic");
+        });
+        await api.post(`/samples/${data.data._id}/attachments`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
       message.success(`Sample registered: ${data.data.sinNo}`);
       navigate(`/samples/${data.data._id}`);
     } catch (err) {
@@ -368,7 +411,10 @@ const SampleFormPage = () => {
                       </Form.Item>
                     </Col>
                     <Col xs={24} md={7}>
-                      <Form.Item name='reportIssuedTo' label='Report Issued To person'>
+                      <Form.Item
+                        name='reportIssuedTo'
+                        label='Report Issued To person'
+                      >
                         <Input />
                       </Form.Item>
                     </Col>
@@ -394,10 +440,7 @@ const SampleFormPage = () => {
                     </Col>
                     <br />
                     <Col xs={10} md={4}>
-                      <Form.Item
-                        name='contactNo'
-                        label='Contact Number'
-                      >
+                      <Form.Item name='contactNo' label='Contact Number'>
                         <Input />
                       </Form.Item>
                     </Col>
@@ -531,6 +574,102 @@ const SampleFormPage = () => {
                   >
                     <Checkbox>Test Detail Not Provided</Checkbox>
                   </Form.Item>
+                  <Form.Item
+                    name={["deviation", "witnessRequired"]}
+                    valuePropName='checked'
+                  >
+                    <Checkbox>Witness required</Checkbox>
+                  </Form.Item>
+                  <Form.Item
+                    name={["deviation", "Ready sample"]}
+                    valuePropName='checked'
+                  >
+                    <Checkbox>Ready sample</Checkbox>
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              key: "attachments",
+              label: "Attachments",
+              children: (
+                <>
+                  <Title level={5}>Attachments</Title>
+                  <Upload
+                    multiple
+                    beforeUpload={() => false}
+                    fileList={attachmentFileList}
+                    onChange={handleAttachmentUploadChange}
+                    showUploadList={{ showRemoveIcon: true }}
+                  >
+                    <Button icon={<UploadOutlined />}>Select files</Button>
+                  </Upload>
+                  {attachments.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      {attachments.map((attachment, i) => (
+                        <Row
+                          gutter={8}
+                          key={attachment.uid || i}
+                          style={{ marginBottom: 8 }}
+                        >
+                          <Col xs={24} md={8}>
+                            <Input
+                              placeholder='File Name'
+                              value={attachment.fileName}
+                              onChange={(e) => {
+                                const next = [...attachments];
+                                next[i].fileName = e.target.value;
+                                setAttachments(next);
+                              }}
+                            />
+                          </Col>
+                          <Col xs={24} md={8}>
+                            <Select
+                              value={attachment.type || "electronic"}
+                              onChange={(value) => {
+                                const next = [...attachments];
+                                next[i].type = value;
+                                setAttachments(next);
+                              }}
+                              options={[
+                                { value: "electronic", label: "Electronic" },
+                                { value: "physical", label: "Physical" },
+                              ]}
+                              style={{ width: "100%" }}
+                            />
+                          </Col>
+                          <Col xs={24} md={6}>
+                            <Input
+                              placeholder='Description'
+                              value={attachment.description}
+                              onChange={(e) => {
+                                const next = [...attachments];
+                                next[i].description = e.target.value;
+                                setAttachments(next);
+                              }}
+                            />
+                          </Col>
+                          <Col xs={24} md={2}>
+                            <Button
+                              type='text'
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => {
+                                setAttachmentFileList((prev) =>
+                                  prev.filter(
+                                    (file) => file.uid !== attachment.uid,
+                                  ),
+                                );
+                                setAttachments((prev) =>
+                                  prev.filter((_, j) => j !== i),
+                                );
+                              }}
+                            />
+                          </Col>
+                        </Row>
+                      ))}
+                    </div>
+                  )}
                 </>
               ),
             },

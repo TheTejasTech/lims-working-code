@@ -1,8 +1,8 @@
-const SampleInward = require('../models/SampleInward');
-const Customer = require('../models/Customer');
-const { generateSinNo, generateLabNo } = require('../utils/generateNumber');
-const { canTransition } = require('../utils/statusTransition');
-const { emitEvent } = require('../config/socket');
+const SampleInward = require("../models/SampleInward");
+const Customer = require("../models/Customer");
+const { generateSinNo, generateLabNo } = require("../utils/generateNumber");
+const { canTransition } = require("../utils/statusTransition");
+const { emitEvent } = require("../config/socket");
 
 const calcTotalQuantity = (samples) =>
   (samples || [])
@@ -12,13 +12,23 @@ const calcTotalQuantity = (samples) =>
 const calcAmounts = (body) => {
   const totalAmount = Number(body.totalAmount) || 0;
   const discountPercent = Number(body.discountPercent) || 0;
-  const discountAmount = body.discountAmount ?? (totalAmount * discountPercent) / 100;
+  const discountAmount =
+    body.discountAmount ?? (totalAmount * discountPercent) / 100;
   const taxableAmount = totalAmount - discountAmount;
   const gstPercent = Number(body.gstPercent) || 18;
   const gstAmount = body.gstAmount ?? (taxableAmount * gstPercent) / 100;
   const amountPaid = Number(body.amountPaid) || 0;
   const balanceAmount = taxableAmount + gstAmount - amountPaid;
-  return { totalAmount, discountPercent, discountAmount, taxableAmount, gstPercent, gstAmount, amountPaid, balanceAmount };
+  return {
+    totalAmount,
+    discountPercent,
+    discountAmount,
+    taxableAmount,
+    gstPercent,
+    gstAmount,
+    amountPaid,
+    balanceAmount,
+  };
 };
 
 const assignLabNumbers = async (samples) => {
@@ -47,19 +57,22 @@ const getSamples = async (req, res) => {
 
     if (req.query.status) filter.status = req.query.status;
     if (req.query.customerId) filter.customerId = req.query.customerId;
-    if (req.query.isExpress === 'true') filter.isExpress = true;
+    if (req.query.isExpress === "true") filter.isExpress = true;
     if (req.query.search) {
       filter.$or = [
-        { sinNo: { $regex: req.query.search, $options: 'i' } },
-        { referenceNo: { $regex: req.query.search, $options: 'i' } },
-        { 'samples.labNo': { $regex: req.query.search, $options: 'i' } },
+        { sinNo: { $regex: req.query.search, $options: "i" } },
+        { referenceNo: { $regex: req.query.search, $options: "i" } },
+        { "samples.labNo": { $regex: req.query.search, $options: "i" } },
       ];
     }
 
     const [raw, total] = await Promise.all([
       SampleInward.find(filter)
-        .populate('customerId', 'customerName alias isPremium premiumCustomer isBlocked')
-        .populate('allottedTo', 'userName userInitial')
+        .populate(
+          "customerId",
+          "customerName alias isPremium premiumCustomer isBlocked",
+        )
+        .populate("allottedTo", "userName userInitial")
         .sort({ isExpress: -1, inwardDate: -1 })
         .skip(skip)
         .limit(limit),
@@ -78,7 +91,7 @@ const getSamples = async (req, res) => {
 
 // GET /api/samples/pending
 const getPendingSamples = async (req, res) => {
-  req.query.status = req.query.status || 'inward';
+  req.query.status = req.query.status || "inward";
   return getSamples(req, res);
 };
 
@@ -89,10 +102,10 @@ const getCompletedSamples = async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 20;
     const skip = (page - 1) * limit;
 
-    const filter = { status: { $in: ['dispatched', 'invoiced', 'approved'] } };
+    const filter = { status: { $in: ["dispatched", "invoiced", "approved"] } };
     const [data, total] = await Promise.all([
       SampleInward.find(filter)
-        .populate('customerId', 'customerName alias')
+        .populate("customerId", "customerName alias")
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -109,11 +122,14 @@ const getCompletedSamples = async (req, res) => {
 const getSampleById = async (req, res) => {
   try {
     const sample = await SampleInward.findById(req.params.id)
-      .populate('customerId')
-      .populate('allottedTo', 'userName userInitial department')
-      .populate('createdBy', 'userName');
+      .populate("customerId")
+      .populate("allottedTo", "userName userInitial department")
+      .populate("createdBy", "userName");
 
-    if (!sample) return res.status(404).json({ success: false, message: 'Sample not found' });
+    if (!sample)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
     res.json({ success: true, data: sample });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -124,12 +140,19 @@ const getSampleById = async (req, res) => {
 const createSample = async (req, res) => {
   try {
     const customer = await Customer.findById(req.body.customerId);
-    if (!customer) return res.status(400).json({ success: false, message: 'Customer not found' });
+    if (!customer)
+      return res
+        .status(400)
+        .json({ success: false, message: "Customer not found" });
 
-    if (customer.isBlocked && !customer.isPremium && !customer.premiumCustomer) {
+    if (
+      customer.isBlocked &&
+      !customer.isPremium &&
+      !customer.premiumCustomer
+    ) {
       return res.status(403).json({
         success: false,
-        message: `Customer blocked: ${customer.blockReason || 'Credit hold'}`,
+        message: `Customer blocked: ${customer.blockReason || "Credit hold"}`,
       });
     }
 
@@ -137,21 +160,31 @@ const createSample = async (req, res) => {
     const samples = await assignLabNumbers(req.body.samples || []);
     const amounts = calcAmounts(req.body);
 
+    const attachments = Array.isArray(req.body.attachments)
+      ? req.body.attachments.map((att) => ({
+          fileName: att.fileName || att.name || "",
+          description: att.description || "",
+          type: att.type || "electronic",
+          filePath: att.filePath || att.path || undefined,
+        }))
+      : [];
+
     const sample = await SampleInward.create({
       ...req.body,
       sinNo,
       samples,
+      attachments,
       totalQuantity: calcTotalQuantity(samples),
       createdBy: req.user._id,
       ...amounts,
     });
 
     const populated = await SampleInward.findById(sample._id)
-      .populate('customerId', 'customerName alias')
-      .populate('allottedTo', 'userName');
+      .populate("customerId", "customerName alias")
+      .populate("allottedTo", "userName");
 
-    emitEvent('new:sample', populated);
-    if (populated.isExpress) emitEvent('urgent:sample', populated);
+    emitEvent("new:sample", populated);
+    if (populated.isExpress) emitEvent("urgent:sample", populated);
 
     res.status(201).json({ success: true, data: populated });
   } catch (error) {
@@ -163,7 +196,10 @@ const createSample = async (req, res) => {
 const updateSample = async (req, res) => {
   try {
     const existing = await SampleInward.findById(req.params.id);
-    if (!existing) return res.status(404).json({ success: false, message: 'Sample not found' });
+    if (!existing)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
 
     if (req.body.status && !canTransition(existing.status, req.body.status)) {
       return res.status(400).json({
@@ -181,18 +217,29 @@ const updateSample = async (req, res) => {
     }
 
     if (updates.totalAmount !== undefined) {
-      Object.assign(updates, calcAmounts({ ...existing.toObject(), ...updates }));
+      Object.assign(
+        updates,
+        calcAmounts({ ...existing.toObject(), ...updates }),
+      );
     }
 
-    const sample = await SampleInward.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    })
-      .populate('customerId', 'customerName alias')
-      .populate('allottedTo', 'userName');
+    const sample = await SampleInward.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      },
+    )
+      .populate("customerId", "customerName alias")
+      .populate("allottedTo", "userName");
 
     if (req.body.status && req.body.status !== existing.status) {
-      emitEvent('sample:status:change', { id: sample._id, sinNo: sample.sinNo, status: sample.status });
+      emitEvent("sample:status:change", {
+        id: sample._id,
+        sinNo: sample.sinNo,
+        status: sample.status,
+      });
     }
 
     res.json({ success: true, data: sample });
@@ -205,17 +252,20 @@ const updateSample = async (req, res) => {
 const deleteSample = async (req, res) => {
   try {
     const sample = await SampleInward.findById(req.params.id);
-    if (!sample) return res.status(404).json({ success: false, message: 'Sample not found' });
+    if (!sample)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
 
-    if (!['inward', 'cancelled'].includes(sample.status)) {
+    if (!["inward", "cancelled"].includes(sample.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Only inward or cancelled samples can be deleted',
+        message: "Only inward or cancelled samples can be deleted",
       });
     }
 
     await sample.deleteOne();
-    res.json({ success: true, message: 'Sample deleted' });
+    res.json({ success: true, message: "Sample deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -225,13 +275,27 @@ const deleteSample = async (req, res) => {
 const addAttachments = async (req, res) => {
   try {
     const sample = await SampleInward.findById(req.params.id);
-    if (!sample) return res.status(404).json({ success: false, message: 'Sample not found' });
+    if (!sample)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
 
-    const newAttachments = (req.files || []).map((f) => ({
+    const descriptions = Array.isArray(req.body.description)
+      ? req.body.description
+      : req.body.description
+        ? [req.body.description]
+        : [];
+    const types = Array.isArray(req.body.type)
+      ? req.body.type
+      : req.body.type
+        ? [req.body.type]
+        : [];
+
+    const newAttachments = (req.files || []).map((f, idx) => ({
       fileName: f.originalname,
       filePath: `/uploads/samples/attachments/${f.filename}`,
-      description: req.body.description || '',
-      type: req.body.type || 'electronic',
+      description: descriptions[idx] || "",
+      type: types[idx] || "electronic",
     }));
 
     sample.attachments.push(...newAttachments);
@@ -243,11 +307,49 @@ const addAttachments = async (req, res) => {
   }
 };
 
+// POST /api/samples/:id/sample-images
+const addSampleImages = async (req, res) => {
+  try {
+    const sample = await SampleInward.findById(req.params.id);
+    if (!sample)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
+
+    const sampleId = req.body.sampleId;
+    const sampleDetail = sample.samples.id(sampleId);
+    if (!sampleDetail) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Sample line not found" });
+    }
+
+    const newImages = (req.files || []).map((f) => ({
+      fileName: f.originalname,
+      filePath: `/uploads/samples/images/${f.filename}`,
+    }));
+
+    sampleDetail.sampleImages = sampleDetail.sampleImages || [];
+    sampleDetail.sampleImages.push(...newImages);
+    await sample.save();
+
+    res.json({ success: true, data: sampleDetail.sampleImages });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/samples/:id/label-print
 const getLabelData = async (req, res) => {
   try {
-    const sample = await SampleInward.findById(req.params.id).populate('customerId', 'customerName');
-    if (!sample) return res.status(404).json({ success: false, message: 'Sample not found' });
+    const sample = await SampleInward.findById(req.params.id).populate(
+      "customerId",
+      "customerName",
+    );
+    if (!sample)
+      return res
+        .status(404)
+        .json({ success: false, message: "Sample not found" });
 
     const { labNo } = req.query;
     const labels = (sample.samples || [])
@@ -277,5 +379,6 @@ module.exports = {
   updateSample,
   deleteSample,
   addAttachments,
+  addSampleImages,
   getLabelData,
 };
