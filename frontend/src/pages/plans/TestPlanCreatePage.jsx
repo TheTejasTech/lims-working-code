@@ -1,61 +1,55 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Table,
   Button,
-  Space,
-  Typography,
-  Modal,
-  Form,
-  Select,
-  message,
-  Tag,
-  Input,
-  Row,
-  Col,
   Card,
+  Col,
   Divider,
+  Form,
+  Input,
+  message,
+  Row,
+  Select,
+  Space,
   Tabs,
+  Typography,
 } from "antd";
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, PlusOutlined } from "@ant-design/icons";
 import api from "../../utils/api";
 
 const { Title } = Typography;
 
-const TestPlanPage = () => {
+const TestPlanCreatePage = () => {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState([]);
   const [samples, setSamples] = useState([]);
   const [specs, setSpecs] = useState([]);
   const [groups, setGroups] = useState([]);
   const [generalTests, setGeneralTests] = useState([]);
   const [chemicalTests, setChemicalTests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
-  const load = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const [p, s, sp, g] = await Promise.all([
-        api.get("/plans"),
+      const [s, sp, g] = await Promise.all([
         api.get("/samples", { params: { status: "inward", limit: 100 } }),
         api.get("/specifications"),
         api.get("/tests/groups/list"),
       ]);
-      setPlans(p.data.data || []);
       setSamples(s.data.data || []);
       setSpecs(sp.data.data || []);
       setGroups(g.data.data || []);
     } catch {
-      message.error("Failed to load");
+      message.error("Failed to load form data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    loadData();
   }, []);
 
   const onSpecChange = async (specId) => {
@@ -127,7 +121,8 @@ const TestPlanPage = () => {
     );
   };
 
-  const save = async (values) => {
+  const savePlan = async (values) => {
+    setSaving(true);
     try {
       const sample = samples.find((s) => s._id === values.sinId);
       const labNo = values.labNo || sample?.samples?.[0]?.labNo;
@@ -139,35 +134,13 @@ const TestPlanPage = () => {
         chemicalTests,
       });
       message.success("Test plan saved");
-      setOpen(false);
-      load();
+      navigate("/plans");
     } catch (e) {
       message.error(e.response?.data?.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
-
-  const columns = [
-    { title: "SIN", key: "sin", render: (_, r) => r.sinId?.sinNo || "—" },
-    { title: "Lab No", dataIndex: "labNo" },
-    {
-      title: "Specification",
-      key: "spec",
-      render: (_, r) => r.testSpecification?.specCode || "—",
-    },
-    {
-      title: "Status",
-      dataIndex: "planStatus",
-      render: (s) => (
-        <Tag color={s === "planned" ? "green" : "default"}>{s}</Tag>
-      ),
-    },
-    {
-      title: "Tests",
-      key: "t",
-      render: (_, r) =>
-        (r.generalTests || []).length + (r.chemicalTests || []).length,
-    },
-  ];
 
   return (
     <div>
@@ -178,116 +151,140 @@ const TestPlanPage = () => {
           justifyContent: "space-between",
         }}
       >
-        <Title level={4} style={{ margin: 0 }}>
-          Test Plan
-        </Title>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={load} />
           <Button
-            type='primary'
-            icon={<PlusOutlined />}
-            onClick={() => navigate("/plans/new")}
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate("/plans")}
           >
-            Create Plan
+            Back
           </Button>
+          <Title level={4} style={{ margin: 0 }}>
+            Create Test Plan
+          </Title>
         </Space>
       </Space>
-      <Table
-        rowKey='_id'
-        columns={columns}
-        dataSource={plans}
-        loading={loading}
-        pagination={{ pageSize: 15 }}
-      />
 
-      <Modal
-        title='Create Test Plan'
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        width={560}
+      <Card
+        loading={loading}
+        style={{ maxWidth: 760, margin: "0 auto", padding: 16 }}
       >
         <Form
           form={form}
           layout='vertical'
-          onFinish={save}
+          onFinish={savePlan}
           initialValues={{ planStatus: "planned" }}
+          style={{ maxWidth: 740, margin: "0 auto" }}
         >
-          <Form.Item
-            name='sinId'
-            label='Sample (SIN)'
-            rules={[{ required: true }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp='label'
-              options={samples.map((s) => ({
-                value: s._id,
-                label: `${s.sinNo} — ${s.customerId?.customerName || ""}`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name='labNo' label='Lab No (optional — uses first line)'>
-            <Input placeholder='LAB/2026/00001' />
-          </Form.Item>
-          <Form.Item
-            name='testSpecification'
-            label='Specification (auto-populates tests)'
-          >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp='label'
-              onChange={onSpecChange}
-              options={specs.map((s) => ({
-                value: s._id,
-                label: `${s.specCode} — ${s.specCaption}`,
-              }))}
-            />
-          </Form.Item>
-          <Col xs={24} md={5}>
-            <Form.Item name='testGroup' label='Or Test Group'>
-              <Select
-                allowClear
-                onChange={onGroupChange}
-                options={groups.map((g) => ({
-                  value: g._id,
-                  label: g.groupName,
-                }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name='testSpecification2' label='Specification 2'>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp='label'
-                options={specs.map((s) => ({
-                  value: s._id,
-                  label: `${s.specCode} — ${s.specCaption}`,
-                }))}
-              />
-            </Form.Item>
-          </Col>
-          <Form.Item name='base' label='Base'>
-            <Input />
-          </Form.Item>
-          <Form.Item name='base2' label='Base 2'>
-            <Input />
-          </Form.Item>
-          <Form.Item name='sampleCondition' label='Sample Condition'>
-            <Input />
-          </Form.Item>
-          <Form.Item name='sampleNature' label='Sample Nature'>
-            <Input />
-          </Form.Item>
-          <Form.Item name='reportPrefix' label='Report Prefix'>
-            <Input />
-          </Form.Item>
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name='sinId'
+                label='Sample (SIN)'
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp='label'
+                  options={samples.map((s) => ({
+                    value: s._id,
+                    label: `${s.sinNo} — ${s.customerId?.customerName || ""}`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name='labNo'
+                label='Lab No (optional — uses first line)'
+              >
+                <Input placeholder='LAB/2026/00001' />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name='testSpecification'
+                label='Specification (auto-populates tests)'
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp='label'
+                  onChange={onSpecChange}
+                  options={specs.map((s) => ({
+                    value: s._id,
+                    label: `${s.specCode} — ${s.specCaption}`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name='testGroup' label='Or Test Group'>
+                <Select
+                  allowClear
+                  onChange={onGroupChange}
+                  options={groups.map((g) => ({
+                    value: g._id,
+                    label: g.groupName,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name='testSpecification2' label='Specification 2'>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp='label'
+                  options={specs.map((s) => ({
+                    value: s._id,
+                    label: `${s.specCode} — ${s.specCaption}`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name='base' label='Base'>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name='base2' label='Base 2'>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name='sampleCondition' label='Sample Condition'>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 12]}>
+            <Col xs={24} md={12}>
+              <Form.Item name='sampleNature' label='Sample Nature'>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name='reportPrefix' label='Report Prefix'>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item name='officeInstruction' label='Office Instruction'>
             <Input.TextArea rows={2} />
           </Form.Item>
+
           <Tabs
             items={[
               {
@@ -627,6 +624,7 @@ const TestPlanPage = () => {
               },
             ]}
           />
+
           <Form.Item name='planStatus' label='Status'>
             <Select
               options={[
@@ -635,13 +633,14 @@ const TestPlanPage = () => {
               ]}
             />
           </Form.Item>
-          <Button type='primary' htmlType='submit' block>
+
+          <Button type='primary' htmlType='submit' block loading={saving}>
             Save Plan
           </Button>
         </Form>
-      </Modal>
+      </Card>
     </div>
   );
 };
 
-export default TestPlanPage;
+export default TestPlanCreatePage;

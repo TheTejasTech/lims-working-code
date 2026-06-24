@@ -18,6 +18,7 @@ import TestMasterPage from "./pages/masters/TestMasterPage";
 import TestFormPage from "./pages/masters/TestFormPage";
 import EquipmentPage from "./pages/masters/EquipmentPage";
 import TestPlanPage from "./pages/plans/TestPlanPage";
+import TestPlanCreatePage from "./pages/plans/TestPlanCreatePage";
 import WorkshopPage from "./pages/workshop/WorkshopPage";
 import ResultsPage from "./pages/results/ResultsPage";
 import ApprovalsPage from "./pages/approvals/ApprovalsPage";
@@ -135,6 +136,14 @@ const App = () => {
           element={
             <ProtectedRoute pageName='plans'>
               <TestPlanPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/plans/new'
+          element={
+            <ProtectedRoute pageName='plans' action='canAdd'>
+              <TestPlanCreatePage />
             </ProtectedRoute>
           }
         />

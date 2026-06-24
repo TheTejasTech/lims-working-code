@@ -147,7 +147,7 @@ const MainLayout = () => {
             borderBottom: '1px solid rgba(255,255,255,0.1)',
           }}
         >
-          {collapsed ? 'LIMS' : 'Unite Soft LIMS'}
+          {collapsed ? 'LIMS' : 'UniSoft LIMS'}
         </div>
         <Menu
           theme="dark"
